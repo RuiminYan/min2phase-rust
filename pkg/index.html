@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>min2phase-rust — fast 3x3 solver in your browser</title>
+<style>
+:root {
+  --bg: #0d0e10;
+  --fg: #e7e8ea;
+  --muted: #8a8d92;
+  --border: #24262a;
+  --panel: #16181b;
+  --accent: #5ec57a;
+  --accent-fg: #0d0e10;
+  --warn: #e36868;
+  --U: #f3f3f5;
+  --R: #d63a32;
+  --F: #4eae5a;
+  --D: #f0c93a;
+  --L: #ee8731;
+  --B: #2f7ed1;
+  --gap: 3px;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); }
+body { font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; padding: 20px 16px 80px; max-width: 760px; margin: 0 auto; }
+
+header h1 { font-size: 20px; font-weight: 600; margin: 0 0 2px; letter-spacing: -0.01em; }
+header p  { font-size: 13px; color: var(--muted); margin: 0 0 22px; }
+header a  { color: var(--muted); text-decoration: none; border-bottom: 1px dotted var(--muted); }
+header a:hover { color: var(--accent); border-color: var(--accent); }
+
+.cube-wrap { display: flex; justify-content: center; margin: 0 0 24px; }
+.cube {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  grid-template-rows: repeat(9, 1fr);
+  gap: var(--gap);
+  width: 100%;
+  max-width: 480px;
+  aspect-ratio: 4 / 3;
+}
+.cell { background: transparent; }
+.sticker { border-radius: 3px; box-shadow: inset 0 -2px 0 rgba(0,0,0,0.25); transition: background 120ms ease; }
+.sticker.U { background: var(--U); }
+.sticker.R { background: var(--R); }
+.sticker.F { background: var(--F); }
+.sticker.D { background: var(--D); }
+.sticker.L { background: var(--L); }
+.sticker.B { background: var(--B); }
+
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 0 0 10px; }
+input[type=text] {
+  flex: 1 1 240px;
+  background: var(--panel); color: var(--fg);
+  border: 1px solid var(--border); border-radius: 6px;
+  padding: 9px 12px; font: inherit; font-family: ui-monospace, "Cascadia Mono", Menlo, monospace;
+  outline: none;
+}
+input[type=text]:focus { border-color: var(--accent); }
+
+button {
+  background: var(--panel); color: var(--fg);
+  border: 1px solid var(--border); border-radius: 6px;
+  padding: 9px 14px; font: inherit; cursor: pointer;
+  transition: border-color 120ms, color 120ms, background 120ms;
+}
+button:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+button:active:not(:disabled) { transform: translateY(1px); }
+button:disabled { opacity: 0.5; cursor: not-allowed; }
+button.primary {
+  background: var(--accent); color: var(--accent-fg);
+  border-color: var(--accent); font-weight: 600;
+}
+button.primary:hover:not(:disabled) { filter: brightness(1.05); color: var(--accent-fg); }
+
+#solution {
+  margin: 14px 0 6px;
+  padding: 12px 14px;
+  font-family: ui-monospace, "Cascadia Mono", Menlo, monospace;
+  font-size: 14px; line-height: 1.7;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 6px;
+  word-break: keep-all; white-space: pre-wrap; overflow-wrap: anywhere;
+  min-height: 1.7em;
+}
+#solution.muted { color: var(--muted); font-family: inherit; font-size: 13px; }
+#solution.error { color: var(--warn); }
+
+.stats {
+  font-family: ui-monospace, "Cascadia Mono", Menlo, monospace;
+  font-size: 12px; color: var(--muted);
+  display: flex; flex-wrap: wrap; gap: 4px 16px;
+}
+.stats b { color: var(--fg); font-weight: 500; }
+
+footer { margin-top: 32px; font-size: 12px; color: var(--muted); }
+footer a { color: var(--muted); text-decoration: none; border-bottom: 1px dotted var(--muted); }
+footer a:hover { color: var(--accent); border-color: var(--accent); }
+
+@media (max-width: 480px) {
+  body { padding: 16px 12px 60px; }
+  header h1 { font-size: 18px; }
+  .cube { max-width: 100%; }
+  input[type=text] { font-size: 14px; padding: 10px; }
+  button { padding: 10px 12px; font-size: 14px; }
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>min2phase-rust</h1>
+  <p>Kociemba two-phase 3x3 solver. WASM build, <span id="solve-time-hero">~1 ms</span> per cube. <a href="https://github.com/RuiminYan/min2phase-rust" target="_blank" rel="noopener">source</a></p>
+</header>
+
+<div class="cube-wrap">
+  <div class="cube" id="cube" aria-label="Cube state"></div>
+</div>
+
+<div class="row">
+  <input type="text" id="scramble" placeholder="R U R' U' R' F R F'   (paste a scramble)" autocomplete="off" autocapitalize="off" spellcheck="false">
+  <button id="btn-apply" data-test="apply-scramble">Apply</button>
+</div>
+<div class="row">
+  <button id="btn-random" data-test="random">Random</button>
+  <button id="btn-reset"  data-test="reset">Reset</button>
+  <button id="btn-solve"  data-test="solve" class="primary">Solve</button>
+  <button id="btn-next"   data-test="next" disabled>Next solution</button>
+  <button id="btn-applysol" data-test="apply-solution" disabled>Apply solution</button>
+</div>
+
+<div id="solution" class="muted" data-test="solution">Loading WASM…</div>
+
+<div class="stats" id="stats" data-test="stats">
+  <span>wasm <b id="stat-wasm">—</b></span>
+  <span>tables <b id="stat-init">—</b></span>
+  <span>solve <b id="stat-solve">—</b></span>
+  <span>moves <b id="stat-len">—</b></span>
+  <span>probes <b id="stat-probes">—</b></span>
+</div>
+
+<footer>
+  Algorithm by Herbert Kociemba · Java original by <a href="https://github.com/cs0x7f/min2phase" target="_blank" rel="noopener">cs0x7f</a>. GPL-3.0.
+</footer>
+
+<script type="module" src="./app.js"></script>
+</body>
+</html>

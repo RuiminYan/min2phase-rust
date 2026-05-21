@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>m2p WASM smoke test</title>
+</head>
+<body>
+<pre id="out">loading...</pre>
+<script type="module">
+import init, { Min2Phase } from './m2p_wasm.js';
+
+const log = (...a) => {
+  const el = document.getElementById('out');
+  el.textContent += a.join(' ') + '\n';
+  console.log(...a);
+};
+
+(async () => {
+  try {
+    const t0 = performance.now();
+    await init();
+    log(`wasm init       : ${(performance.now() - t0).toFixed(1)} ms`);
+
+    const t1 = performance.now();
+    const m = new Min2Phase();
+    log(`Min2Phase ctor  : ${(performance.now() - t1).toFixed(1)} ms (tables built)`);
+
+    // 1. super flip — known hard case
+    const sf = m.superFlip();
+    log('superFlip       :', sf);
+    const t2 = performance.now();
+    const sfSol = m.solve(sf);
+    log(`solve superFlip : ${(performance.now() - t2).toFixed(1)} ms`);
+    log('superFlip sol   :', sfSol.trim());
+    log('superFlip len   :', m.lastLength());
+
+    // 2. fromScramble round-trip
+    const scr = "R U R' U' R' F R F'";
+    const f = m.fromScramble(scr);
+    log('scramble        :', scr);
+    log('facelets        :', f);
+    const sol = m.solve(f);
+    log('solve sol       :', sol.trim());
+    log('solve len       :', m.lastLength());
+
+    // 3. timing 50 random cubes
+    const N = 50;
+    const times = [];
+    let totalLen = 0;
+    for (let i = 0; i < N; i++) {
+      const r = m.randomCube();
+      const ts = performance.now();
+      m.solve(r);
+      times.push(performance.now() - ts);
+      totalLen += m.lastLength();
+    }
+    times.sort((a, b) => a - b);
+    const avg = times.reduce((a, b) => a + b, 0) / N;
+    const p50 = times[Math.floor(N * 0.5)];
+    const p95 = times[Math.floor(N * 0.95)];
+    log('');
+    log(`# ${N} random cubes:`);
+    log(`avg solve       : ${avg.toFixed(3)} ms`);
+    log(`p50             : ${p50.toFixed(3)} ms`);
+    log(`p95             : ${p95.toFixed(3)} ms`);
+    log(`min             : ${times[0].toFixed(3)} ms`);
+    log(`max             : ${times[N - 1].toFixed(3)} ms`);
+    log(`avg len         : ${(totalLen / N).toFixed(3)}`);
+    log('');
+    log('OK');
+    document.body.dataset.status = 'ok';
+  } catch (e) {
+    log('FAIL:', e.message || e);
+    document.body.dataset.status = 'fail';
+  }
+})();
+</script>
+</body>
+</html>

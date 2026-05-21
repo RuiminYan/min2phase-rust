@@ -1,0 +1,16 @@
+{
+  "name": "m2p-wasm",
+  "type": "module",
+  "version": "0.1.0",
+  "license": "GPL-3.0-or-later",
+  "files": [
+    "m2p_wasm_bg.wasm",
+    "m2p_wasm.js",
+    "m2p_wasm.d.ts"
+  ],
+  "main": "m2p_wasm.js",
+  "types": "m2p_wasm.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}

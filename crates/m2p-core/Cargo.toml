@@ -1,0 +1,21 @@
+[package]
+name = "m2p-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Two-phase Rubik's Cube solver (Rust port of cs0x7f/min2phase)"
+
+[dependencies]
+rand = "0.8"
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "solve"
+harness = false
+path = "../../benches/solve.rs"
+
+[features]
+default = ["twist-flip-prun"]
+twist-flip-prun = []

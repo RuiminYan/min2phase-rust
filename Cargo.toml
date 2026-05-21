@@ -1,0 +1,18 @@
+[workspace]
+resolver = "2"
+members = ["crates/m2p-core", "crates/m2p-cli", "crates/m2p-wasm"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/RuiminYan/min2phase-rust"
+
+[workspace.dependencies]
+m2p-core = { path = "crates/m2p-core", version = "0.1.0" }
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
