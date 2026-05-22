@@ -2,65 +2,46 @@
 
 A Rust port of [cs0x7f/min2phase](https://github.com/cs0x7f/min2phase) — the Kociemba two-phase solver for 3x3 Rubik's cubes.
 
-- **Browser-ready WASM** — 146 KB, sub-millisecond solves, no `SharedArrayBuffer` requirement.
+- **Browser-ready WASM** — 117 KB, sub-millisecond solves, no `SharedArrayBuffer` requirement.
 - **Native daemon / CLI** — single binary, line-driven stdin/stdout protocol.
 - **Bit-perfect with upstream** — 2000-cube length distribution byte-identical to Java reference.
-- **~20% faster solves, ~2x faster init** vs Java upstream (single-thread, LTO release).
+- **~20% faster solves, ~2× faster init** vs Java upstream (median of 3 runs, LTO release).
 
-## Try it (no install)
+## Three ways to use it
 
-After cloning, open `pkg/index.html` in any browser:
+### 1. Browser GUI
 
-```
+Open `pkg/index.html` over **a local HTTP server**. Double-clicking `file:///…/index.html` will NOT work — Chrome blocks ES modules and WASM from `file://` origins (this affects all WASM projects, not just this one).
+
+```bash
 git clone https://github.com/RuiminYan/min2phase-rust
 cd min2phase-rust
 python -m http.server -d pkg 8000
-# browser: http://localhost:8000/
+# open http://localhost:8000/
 ```
 
-Hit **Random**, then **Solve** — you'll see a ~20-move solution in under a millisecond.
+Click **Random** → **Solve**. You get a sub-22-move solution in under 1 ms.
 
-## Crates
+Equivalents that work too: `npx serve pkg`, VS Code's Live Server, any other static server.
 
-| Crate         | What it is                                             |
-|---------------|--------------------------------------------------------|
-| `m2p-core`    | Pure-Rust algorithm — `Tables`, `Solver`, `tools::*`.  |
-| `m2p-cli`     | `m2p` binary: solve / scramble / random / bench / daemon. |
-| `m2p-wasm`    | `wasm-bindgen` wrapper — exports `Min2Phase` class.    |
-
-## Use it (3 ways)
-
-### 1. Browser / npm — drop in the WASM
-
-```js
-import init, { Min2Phase } from './pkg/m2p_wasm.js';
-await init();                          // ~9 ms
-const m = new Min2Phase();             // build pruning tables, ~100 ms (one-time)
-const facelets = m.fromScramble("R U R' U' R' F R F'");
-const solution = m.solve(facelets);    // ~1 ms
-console.log(solution, m.lastLength()); // "R2 U R2 U' R' F R2 F' R'" 9
-```
-
-Pruning tables live in WASM memory — no separate `.bin` to fetch, no `SharedArrayBuffer`, no CORS gymnastics.
-
-### 2. Native CLI
+### 2. Native CLI / daemon
 
 ```bash
 cargo build --release -p m2p-cli
-./target/release/m2p random
+./target/release/m2p random              # one random cube as 54-char facelets
 ./target/release/m2p scramble "R U R' U' R' F R F'"
 ./target/release/m2p solve <54-char-facelets>
-./target/release/m2p bench 1000
-./target/release/m2p daemon          # line protocol on stdin/stdout
+./target/release/m2p bench 1000          # solve N random cubes, prints percentiles
+./target/release/m2p daemon              # line-driven, one solve per stdin line
 ```
 
-Daemon protocol:
+Daemon protocol (a request per line, a response per line):
 
 ```
 > random
 OK 21 412 us  D' B2 D' L2 D  R2 D2 B2 L2 U' B' F' R  F2 D  U  R2 U2 F' L' R'
 > scramble R U R' U' R' F R F'
-OK 9 178 us  R2 U  R2 U' R' F  R2 F' R'
+OK 11 178 us  U  F2 U' F2 D  R2 B2 U  B2 D' R2
 > quit
 ```
 
@@ -73,65 +54,94 @@ m2p-core = { git = "https://github.com/RuiminYan/min2phase-rust" }
 
 ```rust
 use std::sync::Arc;
-use m2p_core::{Solver, Tables, tools, verbose};
+use m2p_core::{Solver, Tables, tools};
 
-let tables = Arc::new(Tables::build(true));        // 80 ms, do this once
+let tables = Arc::new(Tables::build(true));    // ~85 ms, do this once per process
 let mut solver = Solver::with_tables(tables.clone());
-let sol = solver.solve(
+let solution = solver.solve(
     &facelets,
-    21,                                            // max depth
-    100_000,                                       // probe max
-    0,                                             // probe min
-    verbose::INVERSE_SOLUTION,
+    21,                                        // max depth
+    100_000,                                   // probe max
+    0,                                         // probe min
+    0,                                         // verbose flags (0 = forward solution)
 )?;
 ```
 
 `Arc<Tables>` is the shared table set — clone it across threads, each thread keeps its own `Solver`.
 
-## Performance
+## Performance (Java upstream vs Rust, 2000-cube shootout, 3-run median)
 
-Reproducible: `fixtures/java_2000.tsv` contains 2000 reference cubes with Java's per-cube solve times. Run `Get-Content fixtures/java_2000.tsv | target/release/m2p_shootout.exe` to get the Rust column.
+Same 2000 random cubes, same probe limit, same 200-cube warmup.
 
-|             | Java 21    | Rust (LTO)  | Δ          |
-|-------------|-----------:|------------:|-----------:|
-| Tables init | 149.6 ms   | 79.9 ms     | **1.87×**  |
-| avg solve   | 778 µs     | 628 µs      | **19%**    |
-| p50         | 465 µs     | 361 µs      | **22%**    |
-| p95         | 2495 µs    | 2028 µs     | **19%**    |
-| p99         | 4522 µs    | 3860 µs     | **15%**    |
-| avg length  | 20.5825    | **20.5825** | identical  |
+|             | Java 21       | Rust (LTO)    |  Speedup    |
+|-------------|--------------:|--------------:|------------:|
+| Tables init | ~200 ms       | ~87 ms        | **2.3×**    |
+| avg solve   | ~947 µs       | ~771 µs       | **~20%**    |
+| p50         | ~551 µs       | ~436 µs       | **~21%**    |
+| max         | ~30 ms        | ~17 ms        | **~45%**    |
+| avg length  | 20.5825       | **20.5825**   | identical   |
 | length hist | 15:1 16:1 17:3 18:20 19:119 20:514 21:1342 | **identical** | bit-perfect |
 
-WASM (Chrome, no SIMD): 906 µs / solve, +35% over native — fast enough for UI thread.
+WASM build runs the same algorithm in Chrome at **~0.7 ms/solve** (no SIMD, no threads). Fast enough for the UI thread.
+
+## Reproduce the numbers yourself
+
+```bash
+# Rust side (uses fixtures/java_2000.tsv as input)
+cargo build --release --bin m2p_shootout
+Get-Content fixtures/java_2000.tsv | ./target/release/m2p_shootout.exe \
+    2> fixtures/rust_stats.txt > fixtures/rust_out.tsv
+
+# Java side (build once, then run)
+cd ../min2phase
+javac -d test/classes test/Shootout.java src/*.java       # PowerShell: expand the glob in $files first
+Get-Content ../min2phase-rust/fixtures/java_2000.tsv | java -cp test/classes Shootout \
+    2> ../min2phase-rust/fixtures/java_stats.txt > ../min2phase-rust/fixtures/java_out.tsv
+
+# Compare
+diff <(grep len_hist fixtures/rust_stats.txt) <(grep len_hist fixtures/java_stats.txt)
+```
 
 ## Build
 
 ```bash
-# Workspace check
-cargo build --release --workspace
-
-# WASM (requires wasm-pack)
-cargo install wasm-pack       # one-time
+cargo build --release --workspace                                 # native (m2p, m2p_shootout)
+cargo install wasm-pack                                           # one-time
 wasm-pack build crates/m2p-wasm --release --target web --out-dir ../../pkg
-
-# Run tests
-cargo test -p m2p-core --release
+cargo test -p m2p-core --release                                  # 35 unit tests
+cargo bench -p m2p-core                                           # criterion micro-bench
 ```
+
+## Crates
+
+| Crate         | What                                                      |
+|---------------|-----------------------------------------------------------|
+| `m2p-core`    | Pure-Rust algorithm — `Tables`, `Solver`, `tools::*`.     |
+| `m2p-cli`     | `m2p` binary: solve / scramble / random / bench / daemon. |
+| `m2p-wasm`    | `wasm-bindgen` wrapper — exports `Min2Phase` class.       |
 
 ## Correctness
 
-31 unit tests, including `solves_java_fixture_100` which round-trip-validates 100 cubes
-generated by the Java reference. `m2p_shootout` further validates 2000 cubes.
+35 unit tests, including:
+- `solves_java_fixture_100` — round-trip-validates 100 cubes generated by the Java reference.
+- `apply_moves_roundtrip_solves_scrambled` — programmatically inverts a scramble and verifies the cube returns to solved.
+- `pruning_value_matches_java` — pruning table BFS depth distribution matches `pruningValue.txt` byte-for-byte.
 
-Three subtle Java semantics found during port (documented in code comments):
+Three subtle Java semantics rediscovered during the port (documented in code comments):
 
 1. `new CubieCube()` is solved, not zero — load-bearing for `set_flip` / `set_twist`.
-2. Pruning BFS reads the post-assigned `val` in `val & (val >> 2)`.
+2. Pruning BFS update reads the post-assigned `val` in `val & (val >> 2)`.
 3. `CornConjugate(moveCube[j], SymMultInv[0][s], c)` — `idx` is the lookup, not `s`.
+
+## What's NOT ported
+
+- `Tools.initFrom` / `saveTo` — Java's table-cache file format. Skipped; runtime init is already ~85 ms.
+- `Tools.randomLastSlot` / `randomZBLastLayer` / `randomCorner*` / `randomEdge*` — partial-state generators. Easy to add when needed.
 
 ## Credits
 
-- [@cs0x7f](https://github.com/cs0x7f) — original Java [min2phase](https://github.com/cs0x7f/min2phase) and the [min2phase.js](https://github.com/cs0x7f/min2phase.js) JavaScript port. Algorithm by Herbert Kociemba.
+- [@cs0x7f](https://github.com/cs0x7f) — original Java [min2phase](https://github.com/cs0x7f/min2phase) and the [min2phase.js](https://github.com/cs0x7f/min2phase.js) JavaScript port.
+- Algorithm by Herbert Kociemba.
 
 ## License
 
