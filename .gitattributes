@@ -1,0 +1,12 @@
+# Enforce LF line endings across all platforms. Deploy target is Linux,
+# editors on Windows that auto-CRLF should normalize on commit.
+* text=auto eol=lf
+
+# Binary (no line-ending munging, no diff)
+*.wasm binary
+*.png binary
+*.jpg binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
