@@ -41,14 +41,14 @@ fn init_ud_slice_move_conj(t: &mut Tables) {
         let mut j = 0usize;
         while j < N_MOVES {
             CubieCube::edge_mult(&c, &t.move_cube[j], &mut d);
-            t.ud_slice_move[i][j] = d.get_ud_slice(&t.cnk) as u16;
+            t.ud_slice_move[i * N_MOVES + j] = d.get_ud_slice(&t.cnk) as u16;
             j += 3;
         }
         let mut j = 0usize;
         while j < 16 {
             let inv = t.sym_mult_inv[0][j] as i32;
             CubieCube::edge_conjugate(&c, inv, &mut d, t);
-            t.ud_slice_conj[i][j >> 1] = d.get_ud_slice(&t.cnk) as u16;
+            t.ud_slice_conj[i * 8 + (j >> 1)] = d.get_ud_slice(&t.cnk) as u16;
             j += 2;
         }
     }
@@ -56,10 +56,10 @@ fn init_ud_slice_move_conj(t: &mut Tables) {
     for i in 0..N_SLICE {
         let mut j = 0usize;
         while j < N_MOVES {
-            let mut udslice = t.ud_slice_move[i][j] as usize;
+            let mut udslice = t.ud_slice_move[i * N_MOVES + j] as usize;
             for k in 1..3 {
-                udslice = t.ud_slice_move[udslice][j] as usize;
-                t.ud_slice_move[i][j + k] = udslice as u16;
+                udslice = t.ud_slice_move[udslice * N_MOVES + j] as usize;
+                t.ud_slice_move[i * N_MOVES + j + k] = udslice as u16;
             }
             j += 3;
         }
@@ -73,7 +73,7 @@ fn init_flip_move(t: &mut Tables) {
         c.set_flip(t.flip_s2r[i] as i32);
         for j in 0..N_MOVES {
             CubieCube::edge_mult(&c, &t.move_cube[j], &mut d);
-            t.flip_move[i][j] = d.get_flip_sym(t) as u16;
+            t.flip_move[i * N_MOVES + j] = d.get_flip_sym(t) as u16;
         }
     }
 }
@@ -85,7 +85,7 @@ fn init_twist_move(t: &mut Tables) {
         c.set_twist(t.twist_s2r[i] as i32);
         for j in 0..N_MOVES {
             CubieCube::corn_mult(&c, &t.move_cube[j], &mut d);
-            t.twist_move[i][j] = d.get_twist_sym(t) as u16;
+            t.twist_move[i * N_MOVES + j] = d.get_twist_sym(t) as u16;
         }
     }
 }
@@ -98,7 +98,7 @@ fn init_cperm_move(t: &mut Tables) {
         for j in 0..N_MOVES2 {
             let mv = util::UD2STD[j] as usize;
             CubieCube::corn_mult(&c, &t.move_cube[mv], &mut d);
-            t.c_perm_move[i][j] = d.get_cperm_sym(t) as u16;
+            t.c_perm_move[i * N_MOVES2 + j] = d.get_cperm_sym(t) as u16;
         }
     }
 }
@@ -111,7 +111,7 @@ fn init_eperm_move(t: &mut Tables) {
         for j in 0..N_MOVES2 {
             let mv = util::UD2STD[j] as usize;
             CubieCube::edge_mult(&c, &t.move_cube[mv], &mut d);
-            t.e_perm_move[i][j] = d.get_eperm_sym(t) as u16;
+            t.e_perm_move[i * N_MOVES2 + j] = d.get_eperm_sym(t) as u16;
         }
     }
 }
@@ -124,12 +124,12 @@ fn init_mperm_move_conj(t: &mut Tables) {
         for j in 0..N_MOVES2 {
             let mv = util::UD2STD[j] as usize;
             CubieCube::edge_mult(&c, &t.move_cube[mv], &mut d);
-            t.m_perm_move[i][j] = d.get_mperm() as u16;
+            t.m_perm_move[i * N_MOVES2 + j] = d.get_mperm() as u16;
         }
         for j in 0..16 {
             let inv = t.sym_mult_inv[0][j] as i32;
             CubieCube::edge_conjugate(&c, inv, &mut d, t);
-            t.m_perm_conj[i][j] = d.get_mperm() as u16;
+            t.m_perm_conj[i * 16 + j] = d.get_mperm() as u16;
         }
     }
 }
@@ -145,14 +145,14 @@ fn init_comb_p_move_conj(t: &mut Tables) {
             CubieCube::corn_mult(&c, &t.move_cube[mv], &mut d);
             let combo = d.get_ccomb(&t.cnk) as u32;
             let bonus = 70u32 * (((p2pm >> j) & 1) ^ ((i as u32) / 70));
-            t.c_comb_p_move[i][j] = (combo + bonus) as u16;
+            t.c_comb_p_move[i * N_MOVES2 + j] = (combo + bonus) as u16;
         }
         for j in 0..16 {
             let inv = t.sym_mult_inv[0][j] as i32;
             CubieCube::corn_conjugate(&c, inv, &mut d, t);
             let combo = d.get_ccomb(&t.cnk) as u32;
             let bonus = 70u32 * ((i as u32) / 70);
-            t.c_comb_p_conj[i][j] = (combo + bonus) as u16;
+            t.c_comb_p_conj[i * 16 + j] = (combo + bonus) as u16;
         }
     }
 }
@@ -170,10 +170,16 @@ fn init_comb_p_move_conj(t: &mut Tables) {
 /// Source of move/conj data for the BFS step. Variant `Tfp` is the special
 /// `RawMove == null` branch in Java (Twist-Flip pruning) which reads through
 /// `FlipMove` / `Sym8Move` / `FlipS2RF` instead of a raw move table.
+///
+/// For `RawConj`, raw_move is `[n_raw][raw_move_stride]` flat and
+/// raw_conj is `[n_raw][raw_conj_stride]` flat.
 enum BfsSource<'a> {
     RawConj {
-        raw_move: &'a [Vec<u16>],
-        raw_conj: &'a [Vec<u16>],
+        raw_move: &'a [u16],
+        raw_move_stride: usize,
+        raw_conj: &'a [u16],
+        raw_conj_stride: usize,
+        n_raw: usize,
     },
     Tfp,
 }
@@ -182,7 +188,9 @@ enum BfsSource<'a> {
 fn init_raw_sym_prun(
     prun_table: &mut [u32],
     src: BfsSource,
-    sym_move: &[Vec<u16>],
+    sym_move: &[u16],
+    sym_move_stride: usize,
+    n_sym: usize,
     sym_state: &[u16],
     prun_flag: u32,
     full_init: bool,
@@ -190,7 +198,8 @@ fn init_raw_sym_prun(
     flip_r2s: &[u16],
     flip_s2rf: &[u16],
     sym_8_move: &[u8; 8 * 18],
-    flip_move: &[Vec<u16>],
+    flip_move: &[u16],
+    flip_move_stride: usize,
 ) {
     let sym_shift: u32 = prun_flag & 0xf;
     let sym_e2c_magic: u32 = if ((prun_flag >> 4) & 1) == 1 { SYM_E2C_MAGIC } else { 0 };
@@ -204,9 +213,9 @@ fn init_raw_sym_prun(
     let istfp = matches!(src, BfsSource::Tfp);
     let n_raw: usize = match &src {
         BfsSource::Tfp => N_FLIP,
-        BfsSource::RawConj { raw_move, .. } => raw_move.len(),
+        BfsSource::RawConj { n_raw, .. } => *n_raw,
     };
-    let n_size: usize = n_raw * sym_move.len();
+    let n_size: usize = n_raw * n_sym;
     let n_moves_local: usize = if is_phase2 { 10 } else { 18 };
     let next_axis_magic: u32 = if n_moves_local == 10 { 0x42 } else { 0x92492 };
 
@@ -271,18 +280,18 @@ fn init_raw_sym_prun(
 
             let mut m: usize = 0;
             while m < n_moves_local {
-                let mut symx: u32 = sym_move[sym][m] as u32;
+                let mut symx: u32 = sym_move[sym * sym_move_stride + m] as u32;
                 let rawx: u32 = if istfp {
                     // FlipS2RF[FlipMove[flip][Sym8Move[m<<3 | fsym]] ^ fsym ^ (symx & SYM_MASK)]
                     let s8 = sym_8_move[(m << 3) | (fsym as usize)] as usize;
-                    let fm = flip_move[flip as usize][s8] as u32;
+                    let fm = flip_move[(flip as usize) * flip_move_stride + s8] as u32;
                     let arg = fm ^ fsym ^ (symx & sym_mask);
                     flip_s2rf[arg as usize] as u32
                 } else {
                     match &src {
-                        BfsSource::RawConj { raw_move, raw_conj } => {
-                            let rm = raw_move[raw][m] as usize;
-                            raw_conj[rm][(symx & sym_mask) as usize] as u32
+                        BfsSource::RawConj { raw_move, raw_move_stride, raw_conj, raw_conj_stride, .. } => {
+                            let rm = raw_move[raw * (*raw_move_stride) + m] as usize;
+                            raw_conj[rm * (*raw_conj_stride) + (symx & sym_mask) as usize] as u32
                         }
                         BfsSource::Tfp => unreachable!(),
                     }
@@ -319,9 +328,9 @@ fn init_raw_sym_prun(
                             idxx += flip_s2rf[arg as usize] as usize;
                         } else {
                             match &src {
-                                BfsSource::RawConj { raw_conj, .. } => {
+                                BfsSource::RawConj { raw_conj, raw_conj_stride, .. } => {
                                     let conj_idx = (j ^ ((sym_e2c_magic >> (j << 1)) & 3)) as usize;
-                                    idxx += raw_conj[rawx as usize][conj_idx] as usize;
+                                    idxx += raw_conj[(rawx as usize) * (*raw_conj_stride) + conj_idx] as usize;
                                 }
                                 BfsSource::Tfp => unreachable!(),
                             }
@@ -352,17 +361,17 @@ impl Tables {
     }
 
     fn init_coord_tables(&mut self, full_init: bool) {
-        // Allocate move/conj tables. Use Vec<Vec<u16>> for ergonomic 2-D init.
-        self.ud_slice_move = vec![vec![0u16; N_MOVES]; N_SLICE];
-        self.twist_move = vec![vec![0u16; N_MOVES]; N_TWIST_SYM];
-        self.flip_move = vec![vec![0u16; N_MOVES]; N_FLIP_SYM];
-        self.ud_slice_conj = vec![vec![0u16; 8]; N_SLICE];
-        self.c_perm_move = vec![vec![0u16; N_MOVES2]; N_PERM_SYM];
-        self.e_perm_move = vec![vec![0u16; N_MOVES2]; N_PERM_SYM];
-        self.m_perm_move = vec![vec![0u16; N_MOVES2]; N_MPERM];
-        self.m_perm_conj = vec![vec![0u16; 16]; N_MPERM];
-        self.c_comb_p_move = vec![vec![0u16; N_MOVES2]; N_COMB];
-        self.c_comb_p_conj = vec![vec![0u16; 16]; N_COMB];
+        // Allocate flat row-major tables (single contiguous Vec per table).
+        self.ud_slice_move = vec![0u16; N_SLICE * N_MOVES];
+        self.twist_move = vec![0u16; N_TWIST_SYM * N_MOVES];
+        self.flip_move = vec![0u16; N_FLIP_SYM * N_MOVES];
+        self.ud_slice_conj = vec![0u16; N_SLICE * 8];
+        self.c_perm_move = vec![0u16; N_PERM_SYM * N_MOVES2];
+        self.e_perm_move = vec![0u16; N_PERM_SYM * N_MOVES2];
+        self.m_perm_move = vec![0u16; N_MPERM * N_MOVES2];
+        self.m_perm_conj = vec![0u16; N_MPERM * 16];
+        self.c_comb_p_move = vec![0u16; N_COMB * N_MOVES2];
+        self.c_comb_p_conj = vec![0u16; N_COMB * 16];
 
         // Java order in CoordCube.init():
         //   phase2: CPerm, EPerm, MPermConj, CombPConj
@@ -380,11 +389,7 @@ impl Tables {
         self.ud_slice_flip_prun = vec![0u32; N_SLICE * N_FLIP_SYM / 8 + 1];
         self.mc_perm_prun = vec![0u32; N_MPERM * N_PERM_SYM / 8 + 1];
         self.e_perm_c_comb_p_prun = vec![0u32; N_COMB * N_PERM_SYM / 8 + 1];
-        self.twist_flip_prun = if USE_TWIST_FLIP_PRUN {
-            Some(vec![0u32; N_FLIP * N_TWIST_SYM / 8 + 1])
-        } else {
-            None
-        };
+        self.twist_flip_prun = vec![0u32; N_FLIP * N_TWIST_SYM / 8 + 1];
 
         // Run BFS. Move the prun-table fields out via std::mem::take to avoid
         // overlapping borrows with the rest of `self` (which we pass for read).
@@ -394,16 +399,22 @@ impl Tables {
             &mut mc,
             BfsSource::RawConj {
                 raw_move: &self.m_perm_move,
+                raw_move_stride: N_MOVES2,
                 raw_conj: &self.m_perm_conj,
+                raw_conj_stride: 16,
+                n_raw: N_MPERM,
             },
             &self.c_perm_move,
+            N_MOVES2,
+            N_PERM_SYM,
             &self.sym_state_perm,
             0x8ea34,
             full_init,
             &self.flip_r2s,
-            self.flip_s2rf.as_deref().unwrap_or(&[]),
+            &self.flip_s2rf,
             &self.sym_8_move,
             &self.flip_move,
+            N_MOVES,
         );
         self.mc_perm_prun = mc;
 
@@ -413,16 +424,22 @@ impl Tables {
             &mut ec,
             BfsSource::RawConj {
                 raw_move: &self.c_comb_p_move,
+                raw_move_stride: N_MOVES2,
                 raw_conj: &self.c_comb_p_conj,
+                raw_conj_stride: 16,
+                n_raw: N_COMB,
             },
             &self.e_perm_move,
+            N_MOVES2,
+            N_PERM_SYM,
             &self.sym_state_perm,
             0x7d824,
             full_init,
             &self.flip_r2s,
-            self.flip_s2rf.as_deref().unwrap_or(&[]),
+            &self.flip_s2rf,
             &self.sym_8_move,
             &self.flip_move,
+            N_MOVES,
         );
         self.e_perm_c_comb_p_prun = ec;
 
@@ -432,16 +449,22 @@ impl Tables {
             &mut st,
             BfsSource::RawConj {
                 raw_move: &self.ud_slice_move,
+                raw_move_stride: N_MOVES,
                 raw_conj: &self.ud_slice_conj,
+                raw_conj_stride: 8,
+                n_raw: N_SLICE,
             },
             &self.twist_move,
+            N_MOVES,
+            N_TWIST_SYM,
             &self.sym_state_twist,
             0x69603,
             full_init,
             &self.flip_r2s,
-            self.flip_s2rf.as_deref().unwrap_or(&[]),
+            &self.flip_s2rf,
             &self.sym_8_move,
             &self.flip_move,
+            N_MOVES,
         );
         self.ud_slice_twist_prun = st;
 
@@ -451,36 +474,44 @@ impl Tables {
             &mut sf,
             BfsSource::RawConj {
                 raw_move: &self.ud_slice_move,
+                raw_move_stride: N_MOVES,
                 raw_conj: &self.ud_slice_conj,
+                raw_conj_stride: 8,
+                n_raw: N_SLICE,
             },
             &self.flip_move,
+            N_MOVES,
+            N_FLIP_SYM,
             &self.sym_state_flip,
             0x69603,
             full_init,
             &self.flip_r2s,
-            self.flip_s2rf.as_deref().unwrap_or(&[]),
+            &self.flip_s2rf,
             &self.sym_8_move,
             &self.flip_move,
+            N_MOVES,
         );
         self.ud_slice_flip_prun = sf;
 
         // initTwistFlipPrun: RawMove=null (ISTFP), TwistMove (phase1), SymStateTwist, 0x19603
         if USE_TWIST_FLIP_PRUN {
-            if let Some(mut tfp) = self.twist_flip_prun.take() {
-                init_raw_sym_prun(
-                    &mut tfp,
-                    BfsSource::Tfp,
-                    &self.twist_move,
-                    &self.sym_state_twist,
-                    0x19603,
-                    full_init,
-                    &self.flip_r2s,
-                    self.flip_s2rf.as_deref().unwrap_or(&[]),
-                    &self.sym_8_move,
-                    &self.flip_move,
-                );
-                self.twist_flip_prun = Some(tfp);
-            }
+            let mut tfp = std::mem::take(&mut self.twist_flip_prun);
+            init_raw_sym_prun(
+                &mut tfp,
+                BfsSource::Tfp,
+                &self.twist_move,
+                N_MOVES,
+                N_TWIST_SYM,
+                &self.sym_state_twist,
+                0x19603,
+                full_init,
+                &self.flip_r2s,
+                &self.flip_s2rf,
+                &self.sym_8_move,
+                &self.flip_move,
+                N_MOVES,
+            );
+            self.twist_flip_prun = tfp;
         }
     }
 }
@@ -520,38 +551,31 @@ impl CoordCube {
     }
 
     /// from Java: calcPruning(boolean isPhase1)
+    #[inline]
     pub fn calc_pruning(&mut self, tables: &Tables, _is_phase1: bool) {
         let a = get_pruning(
             &tables.ud_slice_twist_prun,
             (self.twist as usize) * N_SLICE
-                + tables.ud_slice_conj[self.slice as usize][self.tsym as usize] as usize,
+                + tables.ud_slice_conj[(self.slice as usize) * 8 + self.tsym as usize] as usize,
         ) as i32;
         let b = get_pruning(
             &tables.ud_slice_flip_prun,
             (self.flip as usize) * N_SLICE
-                + tables.ud_slice_conj[self.slice as usize][self.fsym as usize] as usize,
+                + tables.ud_slice_conj[(self.slice as usize) * 8 + self.fsym as usize] as usize,
         ) as i32;
-        let tfp = tables.twist_flip_prun.as_deref();
-        let s2rf = tables.flip_s2rf.as_deref().unwrap_or(&[]);
+        let tfp = &tables.twist_flip_prun;
+        let s2rf = &tables.flip_s2rf;
         let c = if USE_CONJ_PRUN {
-            if let Some(table) = tfp {
-                let idx = ((self.twistc >> 3) as usize) << 11
-                    | s2rf[(self.flipc ^ (self.twistc & 7)) as usize] as usize;
-                get_pruning(table, idx) as i32
-            } else {
-                0
-            }
+            let idx = ((self.twistc >> 3) as usize) << 11
+                | s2rf[(self.flipc ^ (self.twistc & 7)) as usize] as usize;
+            get_pruning(tfp, idx) as i32
         } else {
             0
         };
         let d = if USE_TWIST_FLIP_PRUN {
-            if let Some(table) = tfp {
-                let idx = (self.twist as usize) << 11
-                    | s2rf[((self.flip << 3) | (self.fsym ^ self.tsym)) as usize] as usize;
-                get_pruning(table, idx) as i32
-            } else {
-                0
-            }
+            let idx = (self.twist as usize) << 11
+                | s2rf[((self.flip << 3) | (self.fsym ^ self.tsym)) as usize] as usize;
+            get_pruning(tfp, idx) as i32
         } else {
             0
         };
@@ -559,21 +583,19 @@ impl CoordCube {
     }
 
     /// from Java: setWithPrun(CubieCube cc, int depth) -> bool
+    #[inline]
     pub fn set_with_prun(&mut self, tables: &Tables, cc: &CubieCube, depth: i32) -> bool {
         let twist_full = cc.get_twist_sym(tables);
         let flip_full = cc.get_flip_sym(tables);
         self.tsym = twist_full & 7;
         self.twist = twist_full >> 3;
 
-        let s2rf = tables.flip_s2rf.as_deref().unwrap_or(&[]);
+        let s2rf = &tables.flip_s2rf;
+        let tfp = &tables.twist_flip_prun;
         self.prun = if USE_TWIST_FLIP_PRUN {
-            if let Some(table) = tables.twist_flip_prun.as_deref() {
-                let idx = (self.twist as usize) << 11
-                    | s2rf[(flip_full ^ self.tsym) as usize] as usize;
-                get_pruning(table, idx) as i32
-            } else {
-                0
-            }
+            let idx = (self.twist as usize) << 11
+                | s2rf[(flip_full ^ self.tsym) as usize] as usize;
+            get_pruning(tfp, idx) as i32
         } else {
             0
         };
@@ -588,12 +610,12 @@ impl CoordCube {
         let a = get_pruning(
             &tables.ud_slice_twist_prun,
             (self.twist as usize) * N_SLICE
-                + tables.ud_slice_conj[self.slice as usize][self.tsym as usize] as usize,
+                + tables.ud_slice_conj[(self.slice as usize) * 8 + self.tsym as usize] as usize,
         ) as i32;
         let b = get_pruning(
             &tables.ud_slice_flip_prun,
             (self.flip as usize) * N_SLICE
-                + tables.ud_slice_conj[self.slice as usize][self.fsym as usize] as usize,
+                + tables.ud_slice_conj[(self.slice as usize) * 8 + self.fsym as usize] as usize,
         ) as i32;
         self.prun = self.prun.max(a).max(b);
         if self.prun > depth {
@@ -608,17 +630,16 @@ impl CoordCube {
             let fc = pc.get_flip_sym(tables);
             self.twistc = tc;
             self.flipc = fc;
-            if let Some(table) = tables.twist_flip_prun.as_deref() {
-                let idx = ((self.twistc >> 3) as usize) << 11
-                    | s2rf[(self.flipc ^ (self.twistc & 7)) as usize] as usize;
-                self.prun = self.prun.max(get_pruning(table, idx) as i32);
-            }
+            let idx = ((self.twistc >> 3) as usize) << 11
+                | s2rf[(self.flipc ^ (self.twistc & 7)) as usize] as usize;
+            self.prun = self.prun.max(get_pruning(tfp, idx) as i32);
         }
 
         self.prun <= depth
     }
 
     /// from Java: doMovePrun(CoordCube cc, int m, boolean isPhase1) -> int
+    #[inline]
     pub fn do_move_prun(
         &mut self,
         tables: &Tables,
@@ -626,37 +647,33 @@ impl CoordCube {
         m: usize,
         _is_phase1: bool,
     ) -> i32 {
-        self.slice = tables.ud_slice_move[cc.slice as usize][m] as i32;
+        self.slice = tables.ud_slice_move[(cc.slice as usize) * N_MOVES + m] as i32;
 
         let s8f = tables.sym_8_move[(m << 3) | (cc.fsym as usize)] as usize;
-        let fmove = tables.flip_move[cc.flip as usize][s8f] as i32;
+        let fmove = tables.flip_move[(cc.flip as usize) * N_MOVES + s8f] as i32;
         self.fsym = (fmove & 7) ^ cc.fsym;
         self.flip = fmove >> 3;
 
         let s8t = tables.sym_8_move[(m << 3) | (cc.tsym as usize)] as usize;
-        let tmove = tables.twist_move[cc.twist as usize][s8t] as i32;
+        let tmove = tables.twist_move[(cc.twist as usize) * N_MOVES + s8t] as i32;
         self.tsym = (tmove & 7) ^ cc.tsym;
         self.twist = tmove >> 3;
 
         let a = get_pruning(
             &tables.ud_slice_twist_prun,
             (self.twist as usize) * N_SLICE
-                + tables.ud_slice_conj[self.slice as usize][self.tsym as usize] as usize,
+                + tables.ud_slice_conj[(self.slice as usize) * 8 + self.tsym as usize] as usize,
         ) as i32;
         let b = get_pruning(
             &tables.ud_slice_flip_prun,
             (self.flip as usize) * N_SLICE
-                + tables.ud_slice_conj[self.slice as usize][self.fsym as usize] as usize,
+                + tables.ud_slice_conj[(self.slice as usize) * 8 + self.fsym as usize] as usize,
         ) as i32;
         let c = if USE_TWIST_FLIP_PRUN {
-            if let Some(table) = tables.twist_flip_prun.as_deref() {
-                let s2rf = tables.flip_s2rf.as_deref().unwrap_or(&[]);
-                let idx = (self.twist as usize) << 11
-                    | s2rf[((self.flip << 3) | (self.fsym ^ self.tsym)) as usize] as usize;
-                get_pruning(table, idx) as i32
-            } else {
-                0
-            }
+            let s2rf = &tables.flip_s2rf;
+            let idx = (self.twist as usize) << 11
+                | s2rf[((self.flip << 3) | (self.fsym ^ self.tsym)) as usize] as usize;
+            get_pruning(&tables.twist_flip_prun, idx) as i32
         } else {
             0
         };
@@ -665,25 +682,22 @@ impl CoordCube {
     }
 
     /// from Java: doMovePrunConj(CoordCube cc, int m) -> int
+    #[inline]
     pub fn do_move_prun_conj(&mut self, tables: &Tables, cc: &CoordCube, m: usize) -> i32 {
         let m_conj = tables.sym_move[3][m] as usize;
 
         let s8f = tables.sym_8_move[(m_conj << 3) | ((cc.flipc & 7) as usize)] as usize;
-        let fmove = tables.flip_move[(cc.flipc >> 3) as usize][s8f] as i32;
+        let fmove = tables.flip_move[((cc.flipc >> 3) as usize) * N_MOVES + s8f] as i32;
         self.flipc = fmove ^ (cc.flipc & 7);
 
         let s8t = tables.sym_8_move[(m_conj << 3) | ((cc.twistc & 7) as usize)] as usize;
-        let tmove = tables.twist_move[(cc.twistc >> 3) as usize][s8t] as i32;
+        let tmove = tables.twist_move[((cc.twistc >> 3) as usize) * N_MOVES + s8t] as i32;
         self.twistc = tmove ^ (cc.twistc & 7);
 
-        if let Some(table) = tables.twist_flip_prun.as_deref() {
-            let s2rf = tables.flip_s2rf.as_deref().unwrap_or(&[]);
-            let idx = ((self.twistc >> 3) as usize) << 11
-                | s2rf[(self.flipc ^ (self.twistc & 7)) as usize] as usize;
-            get_pruning(table, idx) as i32
-        } else {
-            0
-        }
+        let s2rf = &tables.flip_s2rf;
+        let idx = ((self.twistc >> 3) as usize) << 11
+            | s2rf[(self.flipc ^ (self.twistc & 7)) as usize] as usize;
+        get_pruning(&tables.twist_flip_prun, idx) as i32
     }
 }
 
@@ -727,12 +741,12 @@ mod tests {
         let elapsed = start.elapsed();
         eprintln!("Tables::build(true) took {:?}", elapsed);
 
-        // Sanity: move/conj tables populated.
-        assert_eq!(t.ud_slice_move.len(), N_SLICE);
-        assert_eq!(t.twist_move.len(), N_TWIST_SYM);
-        assert_eq!(t.flip_move.len(), N_FLIP_SYM);
-        assert_eq!(t.c_perm_move.len(), N_PERM_SYM);
-        assert_eq!(t.e_perm_move.len(), N_PERM_SYM);
+        // Sanity: move/conj tables populated (flat row-major, length = rows * stride).
+        assert_eq!(t.ud_slice_move.len(), N_SLICE * N_MOVES);
+        assert_eq!(t.twist_move.len(), N_TWIST_SYM * N_MOVES);
+        assert_eq!(t.flip_move.len(), N_FLIP_SYM * N_MOVES);
+        assert_eq!(t.c_perm_move.len(), N_PERM_SYM * N_MOVES2);
+        assert_eq!(t.e_perm_move.len(), N_PERM_SYM * N_MOVES2);
 
         // Pruning tables filled — not still all 0x11.
         assert!(t.ud_slice_twist_prun[0] != 0x11111111);
@@ -740,8 +754,7 @@ mod tests {
         assert!(t.mc_perm_prun[0] != 0x11111111);
         assert!(t.e_perm_c_comb_p_prun[0] != 0x11111111);
         if USE_TWIST_FLIP_PRUN {
-            let tfp = t.twist_flip_prun.as_ref().expect("TFP table");
-            assert!(tfp[0] != 0x11111111);
+            assert!(t.twist_flip_prun[0] != 0x11111111);
         }
     }
 
@@ -759,8 +772,8 @@ mod tests {
         assert_eq!(get_pruning(&t.ud_slice_flip_prun, 0), 0);
         assert_eq!(get_pruning(&t.mc_perm_prun, 0), 0);
         assert_eq!(get_pruning(&t.e_perm_c_comb_p_prun, 0), 0);
-        if let Some(tfp) = t.twist_flip_prun.as_deref() {
-            assert_eq!(get_pruning(tfp, 0), 0);
+        if USE_TWIST_FLIP_PRUN {
+            assert_eq!(get_pruning(&t.twist_flip_prun, 0), 0);
         }
     }
 

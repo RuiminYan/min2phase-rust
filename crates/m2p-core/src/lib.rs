@@ -62,7 +62,7 @@ pub struct Tables {
     pub flip_r2s: Vec<u16>,        // N_FLIP
     pub twist_r2s: Vec<u16>,       // N_TWIST
     pub e_perm_r2s: Vec<u16>,      // N_PERM
-    pub flip_s2rf: Option<Vec<u16>>, // N_FLIP_SYM*8 if USE_TWIST_FLIP_PRUN
+    pub flip_s2rf: Vec<u16>,       // N_FLIP_SYM*8 (always present; USE_TWIST_FLIP_PRUN is const true)
 
     pub sym_state_twist: Vec<u16>, // N_TWIST_SYM
     pub sym_state_flip: Vec<u16>,  // N_FLIP_SYM
@@ -75,22 +75,25 @@ pub struct Tables {
     pub std2ud: [u8; 18],
     pub ckmv2bit: [i32; 11],
 
-    // CoordCube move/conj tables (populated by Tables::build / init_coord_tables).
-    pub ud_slice_move: Vec<Vec<u16>>,    // N_SLICE x N_MOVES
-    pub twist_move: Vec<Vec<u16>>,       // N_TWIST_SYM x N_MOVES
-    pub flip_move: Vec<Vec<u16>>,        // N_FLIP_SYM x N_MOVES
-    pub ud_slice_conj: Vec<Vec<u16>>,    // N_SLICE x 8
-    pub c_perm_move: Vec<Vec<u16>>,      // N_PERM_SYM x N_MOVES2
-    pub e_perm_move: Vec<Vec<u16>>,      // N_PERM_SYM x N_MOVES2
-    pub m_perm_move: Vec<Vec<u16>>,      // N_MPERM x N_MOVES2
-    pub m_perm_conj: Vec<Vec<u16>>,      // N_MPERM x 16
-    pub c_comb_p_move: Vec<Vec<u16>>,    // N_COMB x N_MOVES2
-    pub c_comb_p_conj: Vec<Vec<u16>>,    // N_COMB x 16
+    // CoordCube move/conj tables — flat row-major, contiguous in memory.
+    // Stride is the second dimension; access via `t.x[i * STRIDE + j]`.
+    pub ud_slice_move: Vec<u16>,    // [N_SLICE][N_MOVES]
+    pub twist_move: Vec<u16>,       // [N_TWIST_SYM][N_MOVES]
+    pub flip_move: Vec<u16>,        // [N_FLIP_SYM][N_MOVES]
+    pub ud_slice_conj: Vec<u16>,    // [N_SLICE][8]
+    pub c_perm_move: Vec<u16>,      // [N_PERM_SYM][N_MOVES2]
+    pub e_perm_move: Vec<u16>,      // [N_PERM_SYM][N_MOVES2]
+    pub m_perm_move: Vec<u16>,      // [N_MPERM][N_MOVES2]
+    pub m_perm_conj: Vec<u16>,      // [N_MPERM][16]
+    pub c_comb_p_move: Vec<u16>,    // [N_COMB][N_MOVES2]
+    pub c_comb_p_conj: Vec<u16>,    // [N_COMB][16]
 
     // Pruning tables (bit-packed 4-bit/entry, Vec<u32> mirrors Java int[]).
+    // `USE_TWIST_FLIP_PRUN` is a compile-time const true, so the TFP / S2RF
+    // tables are always present and stored as plain Vec (not Option).
     pub ud_slice_twist_prun: Vec<u32>,         // N_SLICE * N_TWIST_SYM / 8 + 1
     pub ud_slice_flip_prun: Vec<u32>,          // N_SLICE * N_FLIP_SYM / 8 + 1
-    pub twist_flip_prun: Option<Vec<u32>>,     // N_FLIP * N_TWIST_SYM / 8 + 1 if USE_TWIST_FLIP_PRUN
+    pub twist_flip_prun: Vec<u32>,             // N_FLIP * N_TWIST_SYM / 8 + 1
     pub mc_perm_prun: Vec<u32>,                // N_MPERM * N_PERM_SYM / 8 + 1
     pub e_perm_c_comb_p_prun: Vec<u32>,        // N_COMB * N_PERM_SYM / 8 + 1
 }
@@ -137,7 +140,7 @@ impl Tables {
             flip_r2s: vec![0u16; N_FLIP],
             twist_r2s: vec![0u16; N_TWIST],
             e_perm_r2s: vec![0u16; N_PERM],
-            flip_s2rf: None,
+            flip_s2rf: Vec::new(),
 
             sym_state_twist: Vec::new(),
             sym_state_flip: Vec::new(),
@@ -162,7 +165,7 @@ impl Tables {
             c_comb_p_conj: Vec::new(),
             ud_slice_twist_prun: Vec::new(),
             ud_slice_flip_prun: Vec::new(),
-            twist_flip_prun: None,
+            twist_flip_prun: Vec::new(),
             mc_perm_prun: Vec::new(),
             e_perm_c_comb_p_prun: Vec::new(),
         };

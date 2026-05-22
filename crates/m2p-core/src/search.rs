@@ -10,7 +10,7 @@ use crate::cubie::{self, CubieCube, URF_MOVE};
 use crate::coord::CoordCube;
 use crate::util::{Solution, UD2STD};
 use crate::tools::{self, VerifyError};
-use crate::{Tables, N_COMB, N_MPERM, USE_CONJ_PRUN};
+use crate::{Tables, N_COMB, N_MOVES2, N_MPERM, USE_CONJ_PRUN};
 
 // Match Java's package-private knobs.
 const MAX_PRE_MOVES: i32 = 20;
@@ -557,12 +557,12 @@ impl Solver {
                 let m = tables.std2ud[((last_move / 3) * 3 + 1) as usize] as i32;
                 self.state.move_[d1 - 1] = (UD2STD[m as usize] as i32) * 2 - self.state.move_[d1 - 1];
 
-                p2mid = tables.m_perm_move[p2mid as usize][m as usize] as i32;
-                let cm = tables.c_perm_move[p2corn as usize][tables.sym_move_ud[p2csym as usize][m as usize] as usize] as i32;
+                p2mid = tables.m_perm_move[(p2mid as usize) * N_MOVES2 + m as usize] as i32;
+                let cm = tables.c_perm_move[(p2corn as usize) * N_MOVES2 + tables.sym_move_ud[p2csym as usize][m as usize] as usize] as i32;
                 p2corn = cm;
                 p2csym = tables.sym_mult[(p2corn & 0xf) as usize][p2csym as usize] as i32;
                 p2corn >>= 4;
-                let em = tables.e_perm_move[p2edge as usize][tables.sym_move_ud[p2esym as usize][m as usize] as usize] as i32;
+                let em = tables.e_perm_move[(p2edge as usize) * N_MOVES2 + tables.sym_move_ud[p2esym as usize][m as usize] as usize] as i32;
                 p2edge = em;
                 p2esym = tables.sym_mult[(p2edge & 0xf) as usize][p2esym as usize] as i32;
                 p2edge >>= 4;
@@ -574,16 +574,16 @@ impl Solver {
                 self.state.pre_moves[pml] = (UD2STD[m as usize] as i32) * 2 - self.state.pre_moves[pml];
 
                 let inv_mid = tables.m_perm_inv[p2mid as usize] as i32;
-                let mid_moved = tables.m_perm_move[inv_mid as usize][m as usize] as i32;
+                let mid_moved = tables.m_perm_move[(inv_mid as usize) * N_MOVES2 + m as usize] as i32;
                 p2mid = tables.m_perm_inv[mid_moved as usize] as i32;
 
-                p2corn = tables.c_perm_move[(corni >> 4) as usize][tables.sym_move_ud[(corni & 0xf) as usize][m as usize] as usize] as i32;
+                p2corn = tables.c_perm_move[((corni >> 4) as usize) * N_MOVES2 + tables.sym_move_ud[(corni & 0xf) as usize][m as usize] as usize] as i32;
                 corni = (p2corn & !0xf) | (tables.sym_mult[(p2corn & 0xf) as usize][(corni & 0xf) as usize] as i32);
                 p2corn = cubie::get_perm_sym_inv(corni >> 4, corni & 0xf, true, tables);
                 p2csym = p2corn & 0xf;
                 p2corn >>= 4;
 
-                p2edge = tables.e_perm_move[(edgei >> 4) as usize][tables.sym_move_ud[(edgei & 0xf) as usize][m as usize] as usize] as i32;
+                p2edge = tables.e_perm_move[((edgei >> 4) as usize) * N_MOVES2 + tables.sym_move_ud[(edgei & 0xf) as usize][m as usize] as usize] as i32;
                 edgei = (p2edge & !0xf) | (tables.sym_mult[(p2edge & 0xf) as usize][(edgei & 0xf) as usize] as i32);
                 p2edge = cubie::get_perm_sym_inv(edgei >> 4, edgei & 0xf, false, tables);
                 p2esym = p2edge & 0xf;
@@ -621,20 +621,22 @@ impl Solver {
             &tables.e_perm_c_comb_p_prun,
             ((edgei >> 4) as usize) * N_COMB
                 + tables.c_comb_p_conj
-                    [(tables.perm2_comb_p[(corni >> 4) as usize] as usize) & 0xff]
-                    [tables.sym_mult_inv[(edgei & 0xf) as usize][(corni & 0xf) as usize] as usize]
+                    [((tables.perm2_comb_p[(corni >> 4) as usize] as usize) & 0xff) * 16
+                        + tables.sym_mult_inv[(edgei & 0xf) as usize][(corni & 0xf) as usize] as usize]
                     as usize,
         ) as i32;
         let prun_b = crate::coord::get_pruning(
             &tables.e_perm_c_comb_p_prun,
             (p2edge as usize) * N_COMB
-                + tables.c_comb_p_conj[(tables.perm2_comb_p[p2corn as usize] as usize) & 0xff]
-                    [tables.sym_mult_inv[p2esym as usize][p2csym as usize] as usize] as usize,
+                + tables.c_comb_p_conj
+                    [((tables.perm2_comb_p[p2corn as usize] as usize) & 0xff) * 16
+                        + tables.sym_mult_inv[p2esym as usize][p2csym as usize] as usize]
+                    as usize,
         ) as i32;
         let prun_c = crate::coord::get_pruning(
             &tables.mc_perm_prun,
             (p2corn as usize) * N_MPERM
-                + tables.m_perm_conj[p2mid as usize][p2csym as usize] as usize,
+                + tables.m_perm_conj[(p2mid as usize) * 16 + p2csym as usize] as usize,
         ) as i32;
         let prun = prun_a.max(prun_b.max(prun_c));
 
@@ -697,13 +699,13 @@ impl Solver {
                 m += ((0x42i32 >> m) & 3) + 1;
                 continue;
             }
-            let midx = tables.m_perm_move[mid as usize][m as usize] as i32;
-            let mut cornx = tables.c_perm_move[corn as usize]
-                [tables.sym_move_ud[csym as usize][m as usize] as usize] as i32;
+            let midx = tables.m_perm_move[(mid as usize) * N_MOVES2 + m as usize] as i32;
+            let mut cornx = tables.c_perm_move
+                [(corn as usize) * N_MOVES2 + tables.sym_move_ud[csym as usize][m as usize] as usize] as i32;
             let csymx = tables.sym_mult[(cornx & 0xf) as usize][csym as usize] as i32;
             cornx >>= 4;
-            let mut edgex = tables.e_perm_move[edge as usize]
-                [tables.sym_move_ud[esym as usize][m as usize] as usize] as i32;
+            let mut edgex = tables.e_perm_move
+                [(edge as usize) * N_MOVES2 + tables.sym_move_ud[esym as usize][m as usize] as usize] as i32;
             let esymx = tables.sym_mult[(edgex & 0xf) as usize][esym as usize] as i32;
             edgex >>= 4;
             let edgei = cubie::get_perm_sym_inv(edgex, esymx, false, tables);
@@ -713,9 +715,9 @@ impl Solver {
                 &tables.e_perm_c_comb_p_prun,
                 ((edgei >> 4) as usize) * N_COMB
                     + tables.c_comb_p_conj
-                        [(tables.perm2_comb_p[(corni >> 4) as usize] as usize) & 0xff]
-                        [tables.sym_mult_inv[(edgei & 0xf) as usize][(corni & 0xf) as usize]
-                            as usize] as usize,
+                        [((tables.perm2_comb_p[(corni >> 4) as usize] as usize) & 0xff) * 16
+                            + tables.sym_mult_inv[(edgei & 0xf) as usize][(corni & 0xf) as usize] as usize]
+                        as usize,
             ) as i32;
             if prun > maxl + 1 {
                 return maxl - prun + 1;
@@ -726,14 +728,14 @@ impl Solver {
             prun = crate::coord::get_pruning(
                 &tables.mc_perm_prun,
                 (cornx as usize) * N_MPERM
-                    + tables.m_perm_conj[midx as usize][csymx as usize] as usize,
+                    + tables.m_perm_conj[(midx as usize) * 16 + csymx as usize] as usize,
             ) as i32;
             let prun_b = crate::coord::get_pruning(
                 &tables.e_perm_c_comb_p_prun,
                 (edgex as usize) * N_COMB
                     + tables.c_comb_p_conj
-                        [(tables.perm2_comb_p[cornx as usize] as usize) & 0xff]
-                        [tables.sym_mult_inv[esymx as usize][csymx as usize] as usize]
+                        [((tables.perm2_comb_p[cornx as usize] as usize) & 0xff) * 16
+                            + tables.sym_mult_inv[esymx as usize][csymx as usize] as usize]
                         as usize,
             ) as i32;
             let prun = prun.max(prun_b);

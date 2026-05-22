@@ -20,7 +20,7 @@ pub fn e_sym_2_c_sym(idx: i32) -> i32 {
     idx ^ ((SYM_E2C_MAGIC >> ((idx & 0xf) << 1)) & 3) as i32
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CubieCube {
     pub ca: [u8; 8],
     pub ea: [u8; 12],
@@ -79,6 +79,7 @@ impl CubieCube {
     }
 
     /// from Java: CornMult(a, b, prod)
+    #[inline]
     pub fn corn_mult(a: &CubieCube, b: &CubieCube, prod: &mut CubieCube) {
         for corn in 0..8usize {
             let b_idx = (b.ca[corn] & 7) as usize;
@@ -101,6 +102,7 @@ impl CubieCube {
     }
 
     /// from Java: EdgeMult(a, b, prod)
+    #[inline]
     pub fn edge_mult(a: &CubieCube, b: &CubieCube, prod: &mut CubieCube) {
         for ed in 0..12usize {
             let b_idx = (b.ea[ed] >> 1) as usize;
@@ -495,20 +497,20 @@ pub fn init_move_cube_sym(
 }
 
 /// from Java: initSym2Raw — coord: 0=flip, 1=twist, 2=eperm
-/// Returns (count, sym2raw, raw2sym, sym_state, opt s2rf for flip+USE_TWIST_FLIP_PRUN)
+/// Returns (count, sym2raw, raw2sym, sym_state, s2rf for coord==0; else empty Vec)
 pub fn init_sym_2_raw(
     n_raw: usize,
     n_sym: usize,
     coord: i32,
     tables: &Tables,
-) -> (i32, Vec<u16>, Vec<u16>, Vec<u16>, Option<Vec<u16>>) {
+) -> (i32, Vec<u16>, Vec<u16>, Vec<u16>, Vec<u16>) {
     let mut sym2raw = vec![0u16; n_sym];
     let mut raw2sym = vec![0u16; n_raw];
     let mut sym_state = vec![0u16; n_sym];
-    let mut s2rf: Option<Vec<u16>> = if coord == 0 && USE_TWIST_FLIP_PRUN {
-        Some(vec![0u16; N_FLIP_SYM * 8])
+    let mut s2rf: Vec<u16> = if coord == 0 && USE_TWIST_FLIP_PRUN {
+        vec![0u16; N_FLIP_SYM * 8]
     } else {
-        None
+        Vec::new()
     };
 
     // Java's `new CubieCube()` is solved-state; set_flip/set_twist/set_eperm only patch
@@ -544,9 +546,7 @@ pub fn init_sym_2_raw(
                 _ => unreachable!(),
             };
             if coord == 0 && USE_TWIST_FLIP_PRUN {
-                if let Some(buf) = s2rf.as_mut() {
-                    buf[((count as usize) << 3) | (s >> 1)] = idx as u16;
-                }
+                s2rf[((count as usize) << 3) | (s >> 1)] = idx as u16;
             }
             if idx as usize == i {
                 sym_state[count as usize] |= 1u16 << (s / sym_inc);
